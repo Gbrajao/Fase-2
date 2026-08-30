@@ -34,7 +34,25 @@ alunos = pd.read_parquet(
     SILVER_PATH / "alunos.parquet"
 )
 
+ibge = pd.read_parquet(
+    SILVER_PATH / "ibge_municipios.parquet"
+)
+
 print("[OK] Dados Silver carregados.")
+
+
+# ==========================================
+# FUNÇÃO AUXILIAR
+# ==========================================
+
+def obter_meta_ano(linha):
+
+    coluna = f"meta_alfabetizacao_{int(linha['ano'])}"
+
+    if coluna in linha.index:
+        return linha[coluna]
+
+    return None
 
 
 # ==========================================
@@ -50,23 +68,11 @@ def criar_gold_brasil():
 
     df = meta_brasil.copy()
 
-    # Função para buscar a meta correspondente
-    # ao próprio ano do registro
-    def obter_meta_ano(linha):
-
-        coluna = f"meta_alfabetizacao_{int(linha['ano'])}"
-
-        if coluna in linha.index:
-            return linha[coluna]
-
-        return None
-
     df["meta_ano"] = df.apply(
         obter_meta_ano,
         axis=1
     )
 
-    # Diferença entre resultado e meta
     df["diferenca_meta"] = (
         df["taxa_alfabetizacao"]
         - df["meta_ano"]
@@ -99,15 +105,6 @@ def criar_gold_uf():
 
     df = meta_uf.copy()
 
-    def obter_meta_ano(linha):
-
-        coluna = f"meta_alfabetizacao_{int(linha['ano'])}"
-
-        if coluna in linha.index:
-            return linha[coluna]
-
-        return None
-
     df["meta_ano"] = df.apply(
         obter_meta_ano,
         axis=1
@@ -118,7 +115,6 @@ def criar_gold_uf():
         - df["meta_ano"]
     )
 
-    # Indica se atingiu a meta
     df["atingiu_meta"] = (
         df["diferenca_meta"] >= 0
     )
@@ -149,15 +145,6 @@ def criar_gold_municipio():
     print("==============================")
 
     df = meta_municipio.copy()
-
-    def obter_meta_ano(linha):
-
-        coluna = f"meta_alfabetizacao_{int(linha['ano'])}"
-
-        if coluna in linha.index:
-            return linha[coluna]
-
-        return None
 
     df["meta_ano"] = df.apply(
         obter_meta_ano,
@@ -199,7 +186,6 @@ def criar_gold_alunos_municipio():
 
     df = alunos.copy()
 
-    # Colunas auxiliares
     df["aluno_presente"] = (
         df["presenca"] == "Presente"
     ).astype(int)
@@ -208,10 +194,13 @@ def criar_gold_alunos_municipio():
         df["alfabetizado"] == "Sim"
     ).astype(int)
 
-    # Agrega os alunos por município e ano
     resumo = (
         df.groupby(
-            ["ano", "id_municipio", "municipio"],
+            [
+                "ano",
+                "id_municipio",
+                "municipio"
+            ],
             as_index=False
         )
         .agg(
@@ -234,16 +223,13 @@ def criar_gold_alunos_municipio():
         )
     )
 
-    # Percentual observado dentro da amostra
-    resumo["percentual_alfabetizados_amostra"] = (
+    resumo[
+        "percentual_alfabetizados_amostra"
+    ] = (
         resumo["alunos_alfabetizados"]
         / resumo["total_registros_amostra"]
         * 100
     ).round(2)
-
-    # ======================================
-    # INTEGRAÇÃO COM META MUNICIPAL
-    # ======================================
 
     metas = meta_municipio[
         [
@@ -265,16 +251,93 @@ def criar_gold_alunos_municipio():
         how="left"
     )
 
-    # Diferença entre o percentual observado
-    # na amostra e a taxa oficial municipal
-    gold["diferenca_amostra_taxa_oficial"] = (
-        gold["percentual_alfabetizados_amostra"]
+    gold[
+        "diferenca_amostra_taxa_oficial"
+    ] = (
+        gold[
+            "percentual_alfabetizados_amostra"
+        ]
         - gold["taxa_alfabetizacao"]
     )
 
     arquivo_saida = (
         GOLD_PATH
         / "alunos_municipio_analitico.parquet"
+    )
+
+    gold.to_parquet(
+        arquivo_saida,
+        index=False
+    )
+
+    print(f"[OK] Registros: {len(gold)}")
+    print(f"[OK] Arquivo: {arquivo_saida}")
+
+
+# ==========================================
+# GOLD 5 - MUNICÍPIO ENRIQUECIDO COM IBGE
+# ==========================================
+
+def criar_gold_municipio_ibge():
+
+    print("\n==============================")
+    print("CRIANDO GOLD MUNICÍPIO + IBGE")
+    print("==============================")
+
+    educacao = meta_municipio.copy()
+
+    # Mantém somente as colunas necessárias do IBGE
+    ibge_reduzido = ibge[
+        [
+            "id_municipio",
+            "nome_municipio",
+            "sigla_uf",
+            "nome_uf",
+            "regiao"
+        ]
+    ].copy()
+
+    # Integra as duas fontes reais
+    gold = educacao.merge(
+        ibge_reduzido,
+        on="id_municipio",
+        how="left"
+    )
+
+    gold["meta_ano"] = gold.apply(
+        obter_meta_ano,
+        axis=1
+    )
+
+    gold["diferenca_meta"] = (
+        gold["taxa_alfabetizacao"]
+        - gold["meta_ano"]
+    )
+
+    gold["atingiu_meta"] = (
+        gold["diferenca_meta"] >= 0
+    )
+
+    # Validação simples do enriquecimento
+    municipios_sem_ibge = (
+        gold["nome_municipio"]
+        .isnull()
+        .sum()
+    )
+
+    print(
+        "Registros sem correspondência no IBGE:",
+        municipios_sem_ibge
+    )
+
+    print(
+        "Registros com informação de região:",
+        gold["regiao"].notna().sum()
+    )
+
+    arquivo_saida = (
+        GOLD_PATH
+        / "municipio_enriquecido_ibge.parquet"
     )
 
     gold.to_parquet(
@@ -296,6 +359,7 @@ criar_gold_brasil()
 criar_gold_uf()
 criar_gold_municipio()
 criar_gold_alunos_municipio()
+criar_gold_municipio_ibge()
 
 print("\n==============================")
 print("CAMADA GOLD CONCLUÍDA")

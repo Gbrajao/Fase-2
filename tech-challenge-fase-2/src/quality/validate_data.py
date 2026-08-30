@@ -2,92 +2,22 @@ import pandas as pd
 from pathlib import Path
 
 
+# ==========================================
+# CAMINHOS
+# ==========================================
+
 SILVER_PATH = Path("data/silver")
-
-
-def validar_duplicados(df, nome):
-    duplicados = df.duplicated().sum()
-
-    if duplicados == 0:
-        print(f"[OK] {nome}: sem duplicados")
-    else:
-        print(
-            f"[ATENÇÃO] {nome}: "
-            f"{duplicados} duplicados"
-        )
-
-
-def validar_nulos_chave(df, coluna, nome):
-    nulos = df[coluna].isnull().sum()
-
-    if nulos == 0:
-        print(
-            f"[OK] {nome}: "
-            f"chave {coluna} sem nulos"
-        )
-    else:
-        print(
-            f"[ERRO] {nome}: "
-            f"{nulos} nulos em {coluna}"
-        )
-
-
-def validar_percentual(df, coluna, nome):
-    valores = df[coluna].dropna()
-
-    invalidos = valores[
-        ~valores.between(0, 100)
-    ]
-
-    if len(invalidos) == 0:
-        print(
-            f"[OK] {nome}: "
-            f"{coluna} entre 0 e 100"
-        )
-    else:
-        print(
-            f"[ERRO] {nome}: "
-            f"{len(invalidos)} valores inválidos"
-        )
-
-
-def validar_relacionamento(
-    df_origem,
-    df_destino,
-    chave,
-    nome
-):
-    origem = set(
-        df_origem[chave]
-        .dropna()
-        .astype(str)
-    )
-
-    destino = set(
-        df_destino[chave]
-        .dropna()
-        .astype(str)
-    )
-
-    sem_correspondencia = origem - destino
-
-    if len(sem_correspondencia) == 0:
-        print(
-            f"[OK] {nome}: "
-            "todas as chaves possuem correspondência"
-        )
-    else:
-        print(
-            f"[ATENÇÃO] {nome}: "
-            f"{len(sem_correspondencia)} "
-            "chaves sem correspondência"
-        )
+GOLD_PATH = Path("data/gold")
 
 
 print("\n====================================")
 print("INICIANDO VALIDAÇÃO DE QUALIDADE")
 print("====================================")
 
+
+# ==========================================
+# CARREGAMENTO DOS DADOS
+# ==========================================
 
 uf = pd.read_parquet(
     SILVER_PATH / "uf.parquet"
@@ -113,175 +43,458 @@ alunos = pd.read_parquet(
     SILVER_PATH / "alunos.parquet"
 )
 
+ibge = pd.read_parquet(
+    SILVER_PATH / "ibge_municipios.parquet"
+)
+
+gold_ibge = pd.read_parquet(
+    GOLD_PATH / "municipio_enriquecido_ibge.parquet"
+)
+
+
+# ==========================================
+# DUPLICADOS
+# ==========================================
 
 print("\n--- DUPLICADOS ---")
 
-validar_duplicados(
-    uf,
-    "UF"
-)
 
-validar_duplicados(
-    meta_brasil,
-    "Meta Brasil"
-)
+bases = {
+    "UF": uf,
+    "Meta Brasil": meta_brasil,
+    "Meta UF": meta_uf,
+    "Meta Município": meta_municipio,
+    "Município": municipio,
+    "Alunos": alunos,
+    "IBGE Municípios": ibge
+}
 
-validar_duplicados(
-    meta_uf,
-    "Meta UF"
-)
 
-validar_duplicados(
-    meta_municipio,
-    "Meta Município"
-)
+for nome, df in bases.items():
 
-validar_duplicados(
-    municipio,
-    "Município"
-)
+    duplicados = df.duplicated().sum()
 
-validar_duplicados(
-    alunos,
-    "Alunos"
-)
+    if duplicados == 0:
+        print(
+            f"[OK] {nome}: sem duplicados"
+        )
+    else:
+        print(
+            f"[ATENÇÃO] {nome}: "
+            f"{duplicados} duplicados"
+        )
 
+
+# ==========================================
+# CHAVES
+# ==========================================
 
 print("\n--- CHAVES ---")
 
-validar_nulos_chave(
-    uf,
-    "sigla_uf",
-    "UF"
-)
 
-validar_nulos_chave(
-    meta_uf,
-    "sigla_uf",
-    "Meta UF"
-)
+chaves = [
+    ("UF", uf, "sigla_uf"),
+    ("Meta UF", meta_uf, "sigla_uf"),
+    (
+        "Meta Município",
+        meta_municipio,
+        "id_municipio"
+    ),
+    (
+        "Município",
+        municipio,
+        "id_municipio"
+    ),
+    (
+        "Alunos",
+        alunos,
+        "id_municipio"
+    ),
+    (
+        "IBGE Municípios",
+        ibge,
+        "id_municipio"
+    )
+]
 
-validar_nulos_chave(
-    meta_municipio,
-    "id_municipio",
-    "Meta Município"
-)
 
-validar_nulos_chave(
-    municipio,
-    "id_municipio",
-    "Município"
-)
+for nome, df, coluna in chaves:
 
-validar_nulos_chave(
-    alunos,
-    "id_municipio",
-    "Alunos"
-)
+    nulos = df[coluna].isnull().sum()
 
+    if nulos == 0:
+        print(
+            f"[OK] {nome}: chave "
+            f"{coluna} sem nulos"
+        )
+    else:
+        print(
+            f"[ATENÇÃO] {nome}: "
+            f"{nulos} valores nulos "
+            f"na chave {coluna}"
+        )
+
+
+# ==========================================
+# PERCENTUAIS
+# ==========================================
 
 print("\n--- PERCENTUAIS ---")
 
-validar_percentual(
-    uf,
-    "taxa_alfabetizacao",
-    "UF"
-)
 
-validar_percentual(
-    meta_brasil,
-    "taxa_alfabetizacao",
-    "Meta Brasil"
-)
+percentuais = [
+    (
+        "UF",
+        uf,
+        "taxa_alfabetizacao"
+    ),
+    (
+        "Meta Brasil",
+        meta_brasil,
+        "taxa_alfabetizacao"
+    ),
+    (
+        "Meta UF",
+        meta_uf,
+        "taxa_alfabetizacao"
+    ),
+    (
+        "Meta Município",
+        meta_municipio,
+        "taxa_alfabetizacao"
+    ),
+    (
+        "Município",
+        municipio,
+        "taxa_alfabetizacao"
+    )
+]
 
-validar_percentual(
-    meta_uf,
-    "taxa_alfabetizacao",
-    "Meta UF"
-)
 
-validar_percentual(
-    meta_municipio,
-    "taxa_alfabetizacao",
-    "Meta Município"
-)
+for nome, df, coluna in percentuais:
 
-validar_percentual(
-    municipio,
-    "taxa_alfabetizacao",
-    "Município"
-)
+    valores = df[coluna].dropna()
 
+    invalidos = valores[
+        ~valores.between(0, 100)
+    ]
+
+    if len(invalidos) == 0:
+        print(
+            f"[OK] {nome}: "
+            f"{coluna} entre 0 e 100"
+        )
+    else:
+        print(
+            f"[ATENÇÃO] {nome}: "
+            f"{len(invalidos)} valores "
+            "fora do intervalo 0-100"
+        )
+
+
+# ==========================================
+# RELACIONAMENTOS
+# ==========================================
 
 print("\n--- RELACIONAMENTOS ---")
 
-validar_relacionamento(
-    meta_uf,
-    uf,
-    "sigla_uf",
-    "Meta UF -> UF"
+
+# ------------------------------------------
+# META UF -> UF
+# ------------------------------------------
+
+ufs_referencia = set(
+    uf["sigla_uf"].dropna().unique()
 )
 
-validar_relacionamento(
-    meta_municipio,
-    municipio,
-    "id_municipio",
-    "Meta Município -> Município"
+ufs_meta = set(
+    meta_uf["sigla_uf"].dropna().unique()
 )
 
-validar_relacionamento(
-    alunos,
-    municipio,
-    "id_municipio",
-    "Alunos -> Município"
+ufs_sem_correspondencia = sorted(
+    ufs_meta - ufs_referencia
 )
 
+
+if len(ufs_sem_correspondencia) == 0:
+
+    print(
+        "[OK] Meta UF -> UF: "
+        "todas as chaves possuem correspondência"
+    )
+
+else:
+
+    print(
+        "[ATENÇÃO] Meta UF -> UF: "
+        f"{len(ufs_sem_correspondencia)} "
+        "chaves sem correspondência"
+    )
+
+    print(
+        "Siglas sem correspondência:",
+        ufs_sem_correspondencia
+    )
+
+
+# ------------------------------------------
+# META MUNICÍPIO -> MUNICÍPIO
+# ------------------------------------------
+
+ids_municipio = set(
+    municipio[
+        "id_municipio"
+    ].dropna().unique()
+)
+
+ids_meta_municipio = set(
+    meta_municipio[
+        "id_municipio"
+    ].dropna().unique()
+)
+
+meta_sem_municipio = (
+    ids_meta_municipio
+    - ids_municipio
+)
+
+
+if len(meta_sem_municipio) == 0:
+
+    print(
+        "[OK] Meta Município -> Município: "
+        "todas as chaves possuem correspondência"
+    )
+
+else:
+
+    print(
+        "[ATENÇÃO] Meta Município -> Município: "
+        f"{len(meta_sem_municipio)} "
+        "chaves sem correspondência"
+    )
+
+
+# ------------------------------------------
+# ALUNOS -> MUNICÍPIO
+# ------------------------------------------
+
+ids_alunos = set(
+    alunos[
+        "id_municipio"
+    ].dropna().unique()
+)
+
+alunos_sem_municipio = (
+    ids_alunos
+    - ids_municipio
+)
+
+
+if len(alunos_sem_municipio) == 0:
+
+    print(
+        "[OK] Alunos -> Município: "
+        "todas as chaves possuem correspondência"
+    )
+
+else:
+
+    print(
+        "[ATENÇÃO] Alunos -> Município: "
+        f"{len(alunos_sem_municipio)} "
+        "chaves sem correspondência"
+    )
+
+
+# ==========================================
+# IBGE
+# ==========================================
+
+print("\n--- INTEGRAÇÃO COM IBGE ---")
+
+
+ids_ibge = set(
+    ibge[
+        "id_municipio"
+    ].dropna().unique()
+)
+
+
+# Municípios educacionais sem IBGE
+municipios_sem_ibge = (
+    ids_municipio
+    - ids_ibge
+)
+
+
+if len(municipios_sem_ibge) == 0:
+
+    print(
+        "[OK] Município -> IBGE: "
+        "todos os municípios possuem correspondência"
+    )
+
+else:
+
+    print(
+        "[ATENÇÃO] Município -> IBGE: "
+        f"{len(municipios_sem_ibge)} "
+        "municípios sem correspondência"
+    )
+
+
+# Meta Município sem IBGE
+meta_sem_ibge = (
+    ids_meta_municipio
+    - ids_ibge
+)
+
+
+if len(meta_sem_ibge) == 0:
+
+    print(
+        "[OK] Meta Município -> IBGE: "
+        "todas as chaves possuem correspondência"
+    )
+
+else:
+
+    print(
+        "[ATENÇÃO] Meta Município -> IBGE: "
+        f"{len(meta_sem_ibge)} "
+        "chaves sem correspondência"
+    )
+
+
+# ==========================================
+# NULOS IBGE
+# ==========================================
+
+print("\n--- VALORES NULOS IBGE ---")
+
+
+nulos_ibge = (
+    ibge.isnull()
+    .sum()
+)
+
+nulos_ibge = nulos_ibge[
+    nulos_ibge > 0
+]
+
+
+if len(nulos_ibge) == 0:
+
+    print(
+        "[OK] IBGE: nenhum valor nulo"
+    )
+
+else:
+
+    print(
+        "[ATENÇÃO] IBGE possui valores nulos:"
+    )
+
+    for coluna, quantidade in nulos_ibge.items():
+
+        print(
+            f"  {coluna}: {quantidade}"
+        )
+
+
+# ==========================================
+# PROFICIÊNCIA
+# ==========================================
 
 print("\n--- PROFICIÊNCIA ---")
 
-ausentes = alunos[
-    alunos["presenca"] == "Ausente"
+
+ausentes_nulos = alunos[
+    (alunos["presenca"] == "Ausente")
+    & (alunos["proficiencia"].isna())
 ]
 
-presentes = alunos[
-    alunos["presenca"] == "Presente"
+
+presentes_nulos = alunos[
+    (alunos["presenca"] == "Presente")
+    & (alunos["proficiencia"].isna())
 ]
+
 
 print(
     "Proficiência nula entre ausentes:",
-    ausentes["proficiencia"]
-    .isnull()
-    .sum()
+    len(ausentes_nulos)
 )
 
 print(
     "Proficiência nula entre presentes:",
-    presentes["proficiencia"]
-    .isnull()
-    .sum()
+    len(presentes_nulos)
 )
 
+
+# ==========================================
+# VALIDAÇÃO DA GOLD ENRIQUECIDA
+# ==========================================
+
+print("\n--- GOLD MUNICÍPIO + IBGE ---")
+
+
+total_gold = len(gold_ibge)
+
+sem_nome = (
+    gold_ibge[
+        "nome_municipio"
+    ].isnull().sum()
+)
+
+sem_regiao = (
+    gold_ibge[
+        "regiao"
+    ].isnull().sum()
+)
+
+
+print(
+    f"Registros na Gold enriquecida: "
+    f"{total_gold}"
+)
+
+
+if sem_nome == 0:
+
+    print(
+        "[OK] Gold IBGE: "
+        "todos os registros possuem município"
+    )
+
+else:
+
+    print(
+        f"[ATENÇÃO] Gold IBGE: "
+        f"{sem_nome} registros sem município"
+    )
+
+
+if sem_regiao == 0:
+
+    print(
+        "[OK] Gold IBGE: "
+        "todos os registros possuem região"
+    )
+
+else:
+
+    print(
+        f"[ATENÇÃO] Gold IBGE: "
+        f"{sem_regiao} registros sem região"
+    )
+
+
+# ==========================================
+# RESUMO FINAL
+# ==========================================
 
 print("\n====================================")
 print("VALIDAÇÃO DE QUALIDADE CONCLUÍDA")
 print("====================================")
-uf_meta = set(
-    meta_uf["sigla_uf"]
-    .dropna()
-    .astype(str)
-)
-
-uf_base = set(
-    uf["sigla_uf"]
-    .dropna()
-    .astype(str)
-)
-
-faltantes_uf = sorted(
-    uf_meta - uf_base
-)
-
-print(
-    "\nSiglas da Meta UF sem correspondência em UF:",
-    faltantes_uf
-)

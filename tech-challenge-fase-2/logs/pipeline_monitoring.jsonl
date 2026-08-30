@@ -1,0 +1,1 @@
+{"timestamp": "2026-08-30T15:55:22.935535", "pipeline": "tech-challenge-fase-2", "status": "SUCESSO", "duracao_segundos": 0.0033, "bronze": {"quantidade_arquivos": 9, "tamanho_mb": 1.62}, "silver": {"quantidade_arquivos": 7, "tamanho_mb": 0.99}, "gold": {"quantidade_arquivos": 5, "tamanho_mb": 0.75}, "problemas": []}

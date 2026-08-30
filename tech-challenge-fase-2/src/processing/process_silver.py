@@ -46,6 +46,11 @@ ARQUIVO_ALUNOS = (
     / "alunos_2024_amostra.csv"
 )
 
+ARQUIVO_IBGE = (
+    BRONZE_PATH
+    / "ibge_municipios.csv"
+)
+
 
 # ==========================================
 # FUNÇÕES AUXILIARES
@@ -252,7 +257,6 @@ def processar_meta_municipio():
 
     df = df.drop_duplicates()
 
-    # Padroniza id_municipio como texto
     df["id_municipio"] = (
         df["id_municipio"]
         .astype(str)
@@ -386,7 +390,6 @@ def processar_alunos():
         .str.strip()
     )
 
-    # Validação simples da proficiência
     proficiencias_invalidas = df[
         (df["proficiencia"].notna())
         & (df["proficiencia"] < 0)
@@ -423,6 +426,115 @@ def processar_alunos():
 
 
 # ==========================================
+# IBGE MUNICÍPIOS
+# ==========================================
+
+def processar_ibge():
+
+    print("\n==============================")
+    print("PROCESSANDO IBGE MUNICÍPIOS")
+    print("==============================")
+
+    df = pd.read_csv(
+        ARQUIVO_IBGE,
+        dtype={
+            "id_municipio": "string"
+        }
+    )
+
+    mostrar_resumo(
+        df,
+        "IBGE Municípios"
+    )
+
+    df = df.drop_duplicates()
+
+    # O código do município é um identificador,
+    # por isso será tratado como texto.
+    df["id_municipio"] = (
+        df["id_municipio"]
+        .str.strip()
+        .str.zfill(7)
+    )
+
+    df["nome_municipio"] = (
+        df["nome_municipio"]
+        .str.strip()
+    )
+
+    df["sigla_uf"] = (
+        df["sigla_uf"]
+        .str.strip()
+        .str.upper()
+    )
+
+    df["nome_uf"] = (
+        df["nome_uf"]
+        .str.strip()
+    )
+
+    df["regiao"] = (
+        df["regiao"]
+        .str.strip()
+    )
+
+    # Validação da chave id_municipio
+    ids_nulos = (
+        df["id_municipio"]
+        .isnull()
+        .sum()
+    )
+
+    if ids_nulos == 0:
+        print(
+            "[OK] id_municipio sem valores nulos"
+        )
+    else:
+        print(
+            f"[ATENÇÃO] {ids_nulos} IDs nulos"
+        )
+
+    ids_duplicados = (
+        df["id_municipio"]
+        .duplicated()
+        .sum()
+    )
+
+    if ids_duplicados == 0:
+        print(
+            "[OK] id_municipio sem duplicidades"
+        )
+    else:
+        print(
+            f"[ATENÇÃO] {ids_duplicados} "
+            "IDs duplicados"
+        )
+
+    print(
+        "Valores nulos preservados:",
+        df.isnull().sum().sum()
+    )
+
+    arquivo_saida = (
+        SILVER_PATH
+        / "ibge_municipios.parquet"
+    )
+
+    df.to_parquet(
+        arquivo_saida,
+        index=False
+    )
+
+    print(
+        f"[OK] Registros finais: {len(df)}"
+    )
+
+    print(
+        f"[OK] Arquivo criado: {arquivo_saida}"
+    )
+
+
+# ==========================================
 # EXECUÇÃO DA CAMADA SILVER
 # ==========================================
 
@@ -434,6 +546,7 @@ processar_meta_uf()
 processar_meta_municipio()
 processar_municipio()
 processar_alunos()
+processar_ibge()
 
 print("\n==============================")
 print("CAMADA SILVER CONCLUÍDA")
