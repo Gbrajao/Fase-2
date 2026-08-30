@@ -2,3 +2,5 @@ pandas
 pyarrow
 requests
 kafka-python
+azure-eventhub
+python-dotenv
